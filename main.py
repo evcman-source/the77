@@ -1,1022 +1,640 @@
 """
-THE 77 - Mobile Version
-A number-finding puzzle game with 2048-inspired theme
-Built with Kivy for Android/iOS compatibility
+THE 77 - Mobile Responsive Game
+Tested for all screen sizes
 """
 
 from kivy.app import App
-from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
-from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
-from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
+from kivy.uix.widget import Widget
+from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
+from kivy.graphics import Color, Rectangle, RoundedRectangle
 from kivy.core.window import Window
 from kivy.clock import Clock
-from kivy.animation import Animation
-from kivy.properties import NumericProperty, StringProperty, BooleanProperty, ListProperty
+from kivy.properties import NumericProperty, StringProperty
 from kivy.utils import get_color_from_hex
 from kivy.storage.jsonstore import JsonStore
-from kivy.core.text import LabelBase
 from kivy.metrics import dp, sp
 import random
-import time
-import math
+import time as pytime
 
-# 2048 Theme Colors
+THEME = "light"
+LANG = "TR"
+
 COLORS = {
-    'bg': '#faf8ef',
-    'grid_bg': '#bbada0',
-    'cell_empty': '#cdc1b4',
-    'cell_closed': '#eee4da',
-    'cell_closed_alt': '#ede0c8',
-    'cell_hover': '#f2b179',
-    'cell_correct': '#6ece7a',
-    'cell_wrong': '#f67c5f',
-    'cell_solved': '#edc22e',
-    'text_dark': '#776e65',
-    'text_light': '#f9f6f2',
-    'button_new': '#8f7a66',
-    'button_menu': '#bbada0',
-    'overlay': '#faf8efee',
-    'gold': '#edc22e',
-    'progress_bg': '#bbada0',
-    'progress_fill': '#f59563',
+    "light": {"bg": "#FAF8EF", "bg2": "#EDE4D4", "grid": "#BBADA0", "cell": "#CDC1B4",
+              "correct": "#6ECE7A", "wrong": "#F65E3B", "solved": "#EDC22E",
+              "t1": "#776E65", "t2": "#A09588", "tw": "#FFFFFF", "b2": "#BBADA0",
+              "bok": "#6ECE7A", "bwarn": "#F59563", "bdanger": "#F65E3B"},
+    "dark": {"bg": "#1A1A2E", "bg2": "#16213E", "grid": "#2D2D44", "cell": "#4A4A6A",
+             "correct": "#4ADE80", "wrong": "#F87171", "solved": "#FACC15",
+             "t1": "#E2E8F0", "t2": "#94A3B8", "tw": "#FFFFFF", "b2": "#3D3D5C",
+             "bok": "#4ADE80", "bwarn": "#FB923C", "bdanger": "#F87171"}
 }
 
-# Translations
-TRANSLATIONS = {
-    "TR": {
-        "game_title": "THE 77",
-        "select_game": "Oyun Seç",
-        "select_difficulty": "Zorluk Seviyesi",
-        "easy": "KOLAY",
-        "medium": "ORTA",
-        "hard": "ZOR",
-        "back": "◀ Geri",
-        "main_menu": "Ana Menü",
-        "new_game": "Yeni Oyun",
-        "pause": "⏸",
-        "resume": "▶",
-        "next": "Sıradaki:",
-        "time": "Süre:",
-        "best": "En İyi:",
-        "congratulations": "TEBRİKLER!",
-        "new_record": "🏆 YENİ REKOR!",
-        "click_new": "Yeni oyun için butona dokun",
-        "settings": "⚙ Ayarlar",
-        "music": "Müzik",
-        "on": "Açık",
-        "off": "Kapalı",
-        "language": "Dil",
-        "paused": "DURAKLATILDI",
-        "tap_resume": "Devam etmek için dokun",
-    },
-    "EN": {
-        "game_title": "THE 77",
-        "select_game": "Select Game",
-        "select_difficulty": "Select Difficulty",
-        "easy": "EASY",
-        "medium": "MEDIUM",
-        "hard": "HARD",
-        "back": "◀ Back",
-        "main_menu": "Main Menu",
-        "new_game": "New Game",
-        "pause": "⏸",
-        "resume": "▶",
-        "next": "Next:",
-        "time": "Time:",
-        "best": "Best:",
-        "congratulations": "CONGRATULATIONS!",
-        "new_record": "🏆 NEW RECORD!",
-        "click_new": "Tap to play again",
-        "settings": "⚙ Settings",
-        "music": "Music",
-        "on": "On",
-        "off": "Off",
-        "language": "Language",
-        "paused": "PAUSED",
-        "tap_resume": "Tap to resume",
-    },
+TEXTS = {
+    "TR": {"select": "Oyun Sec", "diff": "Zorluk Sec", "easy": "KOLAY", "medium": "ORTA",
+           "hard": "ZOR", "back": "<", "newgame": "Yeni", "next": "Sira:", "time": "Sure:",
+           "congrats": "TEBRIKLER!", "record": "YENI REKOR!", "settings": "Ayarlar",
+           "theme": "Tema", "dark": "Koyu", "light": "Acik", "lang": "Dil"},
+    "EN": {"select": "Select Game", "diff": "Select Difficulty", "easy": "EASY",
+           "medium": "MEDIUM", "hard": "HARD", "back": "<", "newgame": "New",
+           "next": "Next:", "time": "Time:", "congrats": "CONGRATULATIONS!",
+           "record": "NEW RECORD!", "settings": "Settings", "theme": "Theme",
+           "dark": "Dark", "light": "Light", "lang": "Language"}
 }
 
-# Global settings
-current_language = "TR"
+def C(k): return get_color_from_hex(COLORS[THEME][k])
+def T(k): return TEXTS.get(LANG, TEXTS["EN"]).get(k, k)
 
-def t(key):
-    return TRANSLATIONS.get(current_language, TRANSLATIONS["EN"]).get(key, key)
-
-
-class GameStore:
-    """Handles saving/loading best scores"""
+class DataStore:
     def __init__(self):
-        self.store = JsonStore('the77_scores.json')
-    
-    def get_best(self, total, difficulty):
-        key = f"{total}_{difficulty}"
-        if self.store.exists(key):
-            return self.store.get(key)['time']
-        return None
-    
-    def set_best(self, total, difficulty, time_val):
-        key = f"{total}_{difficulty}"
-        current = self.get_best(total, difficulty)
-        if current is None or time_val < current:
-            self.store.put(key, time=time_val)
+        self.db = JsonStore('the77data.json')
+    def get_best(self, t, d):
+        k = f"{t}_{d}"
+        return self.db.get(k)['v'] if self.db.exists(k) else None
+    def set_best(self, t, d, v):
+        k = f"{t}_{d}"
+        old = self.get_best(t, d)
+        if old is None or v < old:
+            self.db.put(k, v=v)
             return True
         return False
+    def load(self):
+        global THEME, LANG
+        if self.db.exists('cfg'):
+            c = self.db.get('cfg')
+            THEME = c.get('theme', 'light')
+            LANG = c.get('lang', 'TR')
+    def save(self):
+        self.db.put('cfg', theme=THEME, lang=LANG)
 
+DB = DataStore()
 
-game_store = GameStore()
-
-
-class Cell(Button):
-    """Individual cell in the game grid"""
-    number = NumericProperty(0)
-    is_open = BooleanProperty(False)
-    is_solved = BooleanProperty(False)
-    
-    def __init__(self, number, row, col, **kwargs):
-        super().__init__(**kwargs)
-        self.number = number
-        self.row = row
-        self.col = col
-        self.background_color = (0, 0, 0, 0)
-        self.background_normal = ''
-        self.background_down = ''
-        self.font_size = sp(24)
-        self.bold = True
-        self.bind(size=self.update_canvas, pos=self.update_canvas)
-        self.bind(is_open=self.update_canvas, is_solved=self.update_canvas)
-    
-    def update_canvas(self, *args):
-        self.canvas.before.clear()
-        with self.canvas.before:
-            # Determine color
-            if self.is_solved:
-                Color(*get_color_from_hex(COLORS['cell_solved']))
-            elif self.is_open:
-                Color(*get_color_from_hex(COLORS['cell_correct'] if self.is_open else COLORS['cell_wrong']))
-            else:
-                Color(*get_color_from_hex(COLORS['cell_closed']))
-            
-            # Draw rounded rectangle
-            RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(8)])
-        
-        # Update text
-        if self.is_open or self.is_solved:
-            self.text = str(self.number)
-            self.color = get_color_from_hex(COLORS['text_light'])
-        else:
-            self.text = ''
-    
-    def show_wrong(self):
-        """Flash red for wrong answer"""
-        self.is_open = True
-        with self.canvas.before:
-            self.canvas.before.clear()
-            Color(*get_color_from_hex(COLORS['cell_wrong']))
-            RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(8)])
-        self.text = str(self.number)
-        self.color = get_color_from_hex(COLORS['text_light'])
-
-
-class GameGrid(GridLayout):
-    """The main game grid"""
-    def __init__(self, rows, cols, total, **kwargs):
-        super().__init__(**kwargs)
-        self.game_rows = rows
-        self.game_cols = cols
-        self.total = total
-        self.cols = cols
-        self.rows = rows
-        self.spacing = dp(6)
-        self.padding = dp(8)
-        self.cells = []
-        
-    def generate_cells(self):
-        """Generate and shuffle cells"""
-        self.clear_widgets()
-        self.cells = []
-        
-        numbers = list(range(1, self.total + 1))
-        random.shuffle(numbers)
-        
-        idx = 0
-        for r in range(self.game_rows):
-            row_cells = []
-            for c in range(self.game_cols):
-                cell = Cell(numbers[idx], r, c)
-                self.add_widget(cell)
-                row_cells.append(cell)
-                idx += 1
-            self.cells.append(row_cells)
-    
-    def get_cell(self, row, col):
-        if 0 <= row < self.game_rows and 0 <= col < self.game_cols:
-            return self.cells[row][col]
-        return None
-    
-    def reset_all(self):
-        """Reset all cells to closed state"""
-        for row in self.cells:
-            for cell in row:
-                cell.is_open = False
-                cell.is_solved = False
-                cell.update_canvas()
-
-
+# ============== MENU ==============
 class MenuScreen(Screen):
-    """Main menu screen"""
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.build_ui()
-    
-    def build_ui(self):
-        layout = FloatLayout()
-        
-        # Background
-        with layout.canvas.before:
-            Color(*get_color_from_hex(COLORS['bg']))
-            self.bg_rect = Rectangle(pos=layout.pos, size=Window.size)
-        layout.bind(size=self._update_bg, pos=self._update_bg)
-        
-        # Title
-        title = Label(
-            text="THE 77",
-            font_size=sp(64),
-            bold=True,
-            color=get_color_from_hex(COLORS['text_dark']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.85}
-        )
-        layout.add_widget(title)
-        
-        # Subtitle
-        subtitle = Label(
-            text=t('select_game'),
-            font_size=sp(24),
-            color=get_color_from_hex(COLORS['text_dark']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.72}
-        )
-        layout.add_widget(subtitle)
-        
-        # Game buttons
-        btn_33 = self.create_menu_button("33", 0.55, COLORS['cell_hover'])
-        btn_33.bind(on_release=lambda x: self.select_game(33))
-        layout.add_widget(btn_33)
-        
-        btn_55 = self.create_menu_button("55", 0.40, COLORS['progress_fill'])
-        btn_55.bind(on_release=lambda x: self.select_game(55))
-        layout.add_widget(btn_55)
-        
-        btn_77 = self.create_menu_button("77", 0.25, COLORS['cell_solved'])
-        btn_77.bind(on_release=lambda x: self.select_game(77))
-        layout.add_widget(btn_77)
-        
-        # Settings button
-        settings_btn = Button(
-            text=t('settings'),
-            font_size=sp(18),
-            size_hint=(0.4, 0.06),
-            pos_hint={'center_x': 0.5, 'center_y': 0.10},
-            background_color=get_color_from_hex(COLORS['button_menu']),
-            color=get_color_from_hex(COLORS['text_light']),
-            background_normal='',
-        )
-        settings_btn.bind(on_release=lambda x: self.go_settings())
-        layout.add_widget(settings_btn)
-        
-        self.add_widget(layout)
-    
-    def create_menu_button(self, text, y_pos, color):
-        btn = Button(
-            text=text,
-            font_size=sp(32),
-            bold=True,
-            size_hint=(0.6, 0.10),
-            pos_hint={'center_x': 0.5, 'center_y': y_pos},
-            background_color=get_color_from_hex(color),
-            color=get_color_from_hex(COLORS['text_light']),
-            background_normal='',
-        )
-        return btn
-    
-    def _update_bg(self, *args):
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
-    
-    def select_game(self, total):
-        app = App.get_running_app()
-        app.selected_total = total
-        app.sm.current = 'difficulty'
-    
-    def go_settings(self):
-        App.get_running_app().sm.current = 'settings'
-
-
-class DifficultyScreen(Screen):
-    """Difficulty selection screen"""
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.build_ui()
-    
-    def build_ui(self):
-        layout = FloatLayout()
-        
-        with layout.canvas.before:
-            Color(*get_color_from_hex(COLORS['bg']))
-            self.bg_rect = Rectangle(pos=layout.pos, size=Window.size)
-        layout.bind(size=self._update_bg, pos=self._update_bg)
-        
-        # Back button
-        back_btn = Button(
-            text=t('back'),
-            font_size=sp(18),
-            size_hint=(0.25, 0.06),
-            pos_hint={'x': 0.02, 'top': 0.98},
-            background_color=get_color_from_hex(COLORS['button_menu']),
-            color=get_color_from_hex(COLORS['text_light']),
-            background_normal='',
-        )
-        back_btn.bind(on_release=lambda x: self.go_back())
-        layout.add_widget(back_btn)
-        
-        # Title (will show selected game number)
-        self.title_label = Label(
-            text="",
-            font_size=sp(56),
-            bold=True,
-            color=get_color_from_hex(COLORS['text_dark']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.82}
-        )
-        layout.add_widget(self.title_label)
-        
-        # Subtitle
-        subtitle = Label(
-            text=t('select_difficulty'),
-            font_size=sp(22),
-            color=get_color_from_hex(COLORS['text_dark']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.70}
-        )
-        layout.add_widget(subtitle)
-        
-        # Difficulty buttons
-        btn_easy = self.create_diff_button(t('easy'), 0.52, COLORS['cell_correct'])
-        btn_easy.bind(on_release=lambda x: self.select_difficulty('easy'))
-        layout.add_widget(btn_easy)
-        
-        btn_medium = self.create_diff_button(t('medium'), 0.38, COLORS['cell_hover'])
-        btn_medium.bind(on_release=lambda x: self.select_difficulty('medium'))
-        layout.add_widget(btn_medium)
-        
-        btn_hard = self.create_diff_button(t('hard'), 0.24, COLORS['cell_wrong'])
-        btn_hard.bind(on_release=lambda x: self.select_difficulty('hard'))
-        layout.add_widget(btn_hard)
-        
-        self.add_widget(layout)
-    
-    def create_diff_button(self, text, y_pos, color):
-        btn = Button(
-            text=text,
-            font_size=sp(26),
-            bold=True,
-            size_hint=(0.65, 0.10),
-            pos_hint={'center_x': 0.5, 'center_y': y_pos},
-            background_color=get_color_from_hex(color),
-            color=get_color_from_hex(COLORS['text_light']),
-            background_normal='',
-        )
-        return btn
-    
-    def _update_bg(self, *args):
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
-    
     def on_enter(self):
-        app = App.get_running_app()
-        self.title_label.text = str(app.selected_total)
+        self.clear_widgets()
+        root = FloatLayout()
+        with root.canvas.before:
+            Color(*C('bg'))
+            self.bg = Rectangle(size=Window.size)
+        root.bind(size=lambda w, s: setattr(self.bg, 'size', s))
+        
+        root.add_widget(Label(text="THE 77", font_size=sp(48), bold=True, color=C('t1'),
+                              pos_hint={'center_x': 0.5, 'center_y': 0.8}))
+        root.add_widget(Label(text=T('select'), font_size=sp(18), color=C('t2'),
+                              pos_hint={'center_x': 0.5, 'center_y': 0.7}))
+        
+        for n, c, y in [(33, 'bok', 0.55), (55, 'bwarn', 0.42), (77, 'bdanger', 0.29)]:
+            b = Button(text=str(n), font_size=sp(26), bold=True, background_normal='',
+                      background_color=C(c), color=C('tw'), size_hint=(0.4, 0.08),
+                      pos_hint={'center_x': 0.5, 'center_y': y})
+            b.bind(on_release=lambda x, num=n: self.go(num))
+            root.add_widget(b)
+        
+        sb = Button(text=T('settings'), font_size=sp(16), background_normal='',
+                   background_color=C('b2'), color=C('tw'), size_hint=(0.3, 0.06),
+                   pos_hint={'center_x': 0.5, 'center_y': 0.12})
+        sb.bind(on_release=lambda x: setattr(App.get_running_app().sm, 'current', 'settings'))
+        root.add_widget(sb)
+        self.add_widget(root)
     
-    def go_back(self):
-        App.get_running_app().sm.current = 'menu'
+    def go(self, n):
+        App.get_running_app().gtotal = n
+        App.get_running_app().sm.current = 'diff'
+
+# ============== DIFFICULTY ==============
+class DiffScreen(Screen):
+    def on_enter(self):
+        self.clear_widgets()
+        root = FloatLayout()
+        with root.canvas.before:
+            Color(*C('bg'))
+            self.bg = Rectangle(size=Window.size)
+        root.bind(size=lambda w, s: setattr(self.bg, 'size', s))
+        
+        bb = Button(text=T('back'), font_size=sp(16), bold=True, background_normal='',
+                   background_color=C('b2'), color=C('tw'), size_hint=(0.15, 0.05),
+                   pos_hint={'x': 0.02, 'top': 0.98})
+        bb.bind(on_release=lambda x: setattr(App.get_running_app().sm, 'current', 'menu'))
+        root.add_widget(bb)
+        
+        root.add_widget(Label(text=str(App.get_running_app().gtotal), font_size=sp(50),
+                              bold=True, color=C('t1'), pos_hint={'center_x': 0.5, 'center_y': 0.78}))
+        root.add_widget(Label(text=T('diff'), font_size=sp(18), color=C('t2'),
+                              pos_hint={'center_x': 0.5, 'center_y': 0.68}))
+        
+        for d, txt, c, y in [('easy', T('easy'), 'bok', 0.52),
+                              ('medium', T('medium'), 'bwarn', 0.38),
+                              ('hard', T('hard'), 'bdanger', 0.24)]:
+            b = Button(text=txt, font_size=sp(22), bold=True, background_normal='',
+                      background_color=C(c), color=C('tw'), size_hint=(0.45, 0.08),
+                      pos_hint={'center_x': 0.5, 'center_y': y})
+            b.bind(on_release=lambda x, df=d: self.go(df))
+            root.add_widget(b)
+        self.add_widget(root)
     
-    def select_difficulty(self, diff):
-        app = App.get_running_app()
-        app.selected_difficulty = diff
-        app.sm.current = 'game'
+    def go(self, d):
+        App.get_running_app().gdiff = d
+        App.get_running_app().sm.current = 'game'
 
-
+# ============== SETTINGS ==============
 class SettingsScreen(Screen):
-    """Settings screen"""
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.build_ui()
+    def on_enter(self):
+        self.clear_widgets()
+        root = FloatLayout()
+        with root.canvas.before:
+            Color(*C('bg'))
+            self.bg = Rectangle(size=Window.size)
+        root.bind(size=lambda w, s: setattr(self.bg, 'size', s))
+        
+        root.add_widget(Label(text=T('settings'), font_size=sp(36), bold=True,
+                              color=C('t1'), pos_hint={'center_x': 0.5, 'center_y': 0.8}))
+        
+        ttxt = f"{T('theme')}: {T('dark') if THEME == 'light' else T('light')}"
+        tb = Button(text=ttxt, font_size=sp(18), background_normal='',
+                   background_color=C('b2'), color=C('tw'), size_hint=(0.5, 0.07),
+                   pos_hint={'center_x': 0.5, 'center_y': 0.55})
+        tb.bind(on_release=lambda x: self.toggle_theme())
+        root.add_widget(tb)
+        
+        lb = Button(text=f"{T('lang')}: {LANG}", font_size=sp(18), background_normal='',
+                   background_color=C('bwarn'), color=C('tw'), size_hint=(0.5, 0.07),
+                   pos_hint={'center_x': 0.5, 'center_y': 0.42})
+        lb.bind(on_release=lambda x: self.toggle_lang())
+        root.add_widget(lb)
+        
+        bb = Button(text=T('back'), font_size=sp(16), background_normal='',
+                   background_color=C('b2'), color=C('tw'), size_hint=(0.3, 0.06),
+                   pos_hint={'center_x': 0.5, 'center_y': 0.2})
+        bb.bind(on_release=lambda x: setattr(App.get_running_app().sm, 'current', 'menu'))
+        root.add_widget(bb)
+        self.add_widget(root)
     
-    def build_ui(self):
-        layout = FloatLayout()
-        
-        with layout.canvas.before:
-            Color(*get_color_from_hex(COLORS['bg']))
-            self.bg_rect = Rectangle(pos=layout.pos, size=Window.size)
-        layout.bind(size=self._update_bg, pos=self._update_bg)
-        
-        # Title
-        title = Label(
-            text=t('settings'),
-            font_size=sp(40),
-            bold=True,
-            color=get_color_from_hex(COLORS['text_dark']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.85}
-        )
-        layout.add_widget(title)
-        
-        # Language button
-        self.lang_btn = Button(
-            text=f"{t('language')}: {current_language}",
-            font_size=sp(22),
-            size_hint=(0.7, 0.10),
-            pos_hint={'center_x': 0.5, 'center_y': 0.55},
-            background_color=get_color_from_hex(COLORS['cell_hover']),
-            color=get_color_from_hex(COLORS['text_light']),
-            background_normal='',
-        )
-        self.lang_btn.bind(on_release=lambda x: self.toggle_language())
-        layout.add_widget(self.lang_btn)
-        
-        # Back button
-        back_btn = Button(
-            text=t('back'),
-            font_size=sp(20),
-            size_hint=(0.5, 0.08),
-            pos_hint={'center_x': 0.5, 'center_y': 0.20},
-            background_color=get_color_from_hex(COLORS['button_menu']),
-            color=get_color_from_hex(COLORS['text_light']),
-            background_normal='',
-        )
-        back_btn.bind(on_release=lambda x: self.go_back())
-        layout.add_widget(back_btn)
-        
-        self.add_widget(layout)
+    def toggle_theme(self):
+        global THEME
+        THEME = 'dark' if THEME == 'light' else 'light'
+        DB.save()
+        self.on_enter()
     
-    def _update_bg(self, *args):
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
-    
-    def toggle_language(self):
-        global current_language
-        langs = ["TR", "EN"]
-        idx = langs.index(current_language)
-        current_language = langs[(idx + 1) % len(langs)]
-        self.lang_btn.text = f"{t('language')}: {current_language}"
-    
-    def go_back(self):
-        App.get_running_app().sm.current = 'menu'
+    def toggle_lang(self):
+        global LANG
+        LANG = 'EN' if LANG == 'TR' else 'TR'
+        DB.save()
+        self.on_enter()
 
-
+# ============== GAME ==============
 class GameScreen(Screen):
-    """Main game screen"""
-    next_target = NumericProperty(1)
-    elapsed_time = NumericProperty(0)
-    is_paused = BooleanProperty(False)
-    won = BooleanProperty(False)
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, **kw):
+        super().__init__(**kw)
         self.grid = None
-        self.start_time = 0
-        self.pause_time = 0
-        self.total_pause = 0
-        self.current_run = []
-        self.checkpoint_size = 1
-        self.final_time = 0
-        self.is_new_record = False
-        self.clock_event = None
+        self.container = None
+        self.cells = []
+        self.next_num = 1
+        self.start_t = 0
+        self.pause_t = 0
+        self.total_p = 0
+        self.paused = False
+        self.won = False
+        self.timer = None
+        self.run = []
+        self.cp = 1
+        self.total = 0
+        self.current_rows = 0
+        self.current_cols = 0
     
     def on_enter(self):
-        """Called when entering the game screen"""
-        self.setup_game()
+        app = App.get_running_app()
+        self.total = app.gtotal
+        self.cp = {33: 3, 55: 5, 77: 7}.get(self.total, 3) if app.gdiff == 'medium' else 1
+        self.make_ui()
+        Clock.schedule_once(lambda dt: self.new_game(), 0.1)
     
     def on_leave(self):
-        """Called when leaving the game screen"""
-        if self.clock_event:
-            self.clock_event.cancel()
+        if self.timer:
+            self.timer.cancel()
     
-    def setup_game(self):
-        app = App.get_running_app()
-        total = app.selected_total
-        difficulty = app.selected_difficulty
-        
-        # Configure grid based on total
-        configs = {
-            33: {'rows': 3, 'cols': 11},
-            55: {'rows': 5, 'cols': 11},
-            77: {'rows': 7, 'cols': 11},
-        }
-        cfg = configs[total]
-        
-        # Configure checkpoint for medium difficulty
-        if difficulty == 'medium':
-            self.checkpoint_size = cfg['rows']
-        else:
-            self.checkpoint_size = 1
-        
+    def make_ui(self):
         self.clear_widgets()
-        self.build_game_ui(cfg['rows'], cfg['cols'], total)
-        self.reset_game()
-    
-    def build_game_ui(self, rows, cols, total):
-        """Build the game UI"""
-        main_layout = FloatLayout()
         
-        # Background
-        with main_layout.canvas.before:
-            Color(*get_color_from_hex(COLORS['bg']))
-            self.bg_rect = Rectangle(pos=(0, 0), size=Window.size)
-        main_layout.bind(size=self._update_bg, pos=self._update_bg)
+        root = BoxLayout(orientation='vertical')
+        with root.canvas.before:
+            Color(*C('bg'))
+            self.bgr = Rectangle(size=Window.size)
+        root.bind(size=lambda w, s: setattr(self.bgr, 'size', s))
         
         # Top bar
-        top_bar = BoxLayout(
-            orientation='horizontal',
-            size_hint=(1, 0.08),
-            pos_hint={'top': 1},
-            padding=dp(8),
-            spacing=dp(8)
-        )
+        top = BoxLayout(size_hint_y=None, height=dp(44), padding=dp(5), spacing=dp(5))
+        with top.canvas.before:
+            Color(*C('bg2'))
+            self.topr = Rectangle()
+        top.bind(size=lambda w, s: setattr(self.topr, 'size', s),
+                pos=lambda w, p: setattr(self.topr, 'pos', p))
         
-        # Back button
-        back_btn = Button(
-            text=t('back'),
-            font_size=sp(16),
-            size_hint=(0.2, 1),
-            background_color=get_color_from_hex(COLORS['button_menu']),
-            color=get_color_from_hex(COLORS['text_light']),
-            background_normal='',
-        )
-        back_btn.bind(on_release=lambda x: self.go_back())
-        top_bar.add_widget(back_btn)
+        bb = Button(text=T('back'), font_size=sp(14), bold=True, background_normal='',
+                   background_color=C('b2'), color=C('tw'), size_hint_x=0.15)
+        bb.bind(on_release=lambda x: self.go_back())
+        top.add_widget(bb)
         
-        # Title
-        title_label = Label(
-            text=f"THE {total}",
-            font_size=sp(22),
-            bold=True,
-            color=get_color_from_hex(COLORS['text_dark']),
-            size_hint=(0.5, 1)
-        )
-        top_bar.add_widget(title_label)
+        top.add_widget(Label(text=f"THE {self.total}", font_size=sp(20), bold=True, color=C('t1')))
         
-        # New game button
-        new_btn = Button(
-            text=t('new_game'),
-            font_size=sp(14),
-            size_hint=(0.3, 1),
-            background_color=get_color_from_hex(COLORS['button_new']),
-            color=get_color_from_hex(COLORS['text_light']),
-            background_normal='',
-        )
-        new_btn.bind(on_release=lambda x: self.reset_game())
-        top_bar.add_widget(new_btn)
+        nb = Button(text=T('newgame'), font_size=sp(13), background_normal='',
+                   background_color=C('bok'), color=C('tw'), size_hint_x=0.18)
+        nb.bind(on_release=lambda x: self.new_game())
+        top.add_widget(nb)
+        root.add_widget(top)
         
-        main_layout.add_widget(top_bar)
+        # Info bar
+        info = BoxLayout(size_hint_y=None, height=dp(36), padding=[dp(10), 0])
+        self.next_lbl = Label(text=f"{T('next')} 1", font_size=sp(16), bold=True,
+                              color=C('solved'), size_hint_x=0.35)
+        info.add_widget(self.next_lbl)
         
-        # Info bar (next number, time, pause)
-        info_bar = BoxLayout(
-            orientation='horizontal',
-            size_hint=(1, 0.07),
-            pos_hint={'top': 0.92},
-            padding=dp(12),
-            spacing=dp(8)
-        )
+        self.time_lbl = Label(text=f"{T('time')} 0s", font_size=sp(15), color=C('t1'))
+        info.add_widget(self.time_lbl)
         
-        # Next number
-        self.next_label = Label(
-            text=f"{t('next')} 1",
-            font_size=sp(20),
-            bold=True,
-            color=get_color_from_hex(COLORS['cell_solved']),
-            halign='left',
-            size_hint=(0.35, 1)
-        )
-        info_bar.add_widget(self.next_label)
-        
-        # Time
-        self.time_label = Label(
-            text=f"{t('time')} 0s",
-            font_size=sp(18),
-            color=get_color_from_hex(COLORS['text_dark']),
-            size_hint=(0.35, 1)
-        )
-        info_bar.add_widget(self.time_label)
-        
-        # Pause button
-        self.pause_btn = Button(
-            text=t('pause'),
-            font_size=sp(22),
-            size_hint=(0.15, 1),
-            background_color=get_color_from_hex(COLORS['progress_fill']),
-            color=get_color_from_hex(COLORS['text_light']),
-            background_normal='',
-        )
+        self.pause_btn = Button(text="||", font_size=sp(16), bold=True, background_normal='',
+                                background_color=C('bwarn'), color=C('tw'), size_hint_x=0.12)
         self.pause_btn.bind(on_release=lambda x: self.toggle_pause())
-        info_bar.add_widget(self.pause_btn)
+        info.add_widget(self.pause_btn)
+        root.add_widget(info)
         
-        main_layout.add_widget(info_bar)
+        # Grid container
+        self.container = FloatLayout()
+        with self.container.canvas.before:
+            Color(*C('grid'))
+            self.grid_bg = RoundedRectangle(pos=(0,0), size=(100,100), radius=[dp(8)])
         
-        # Best score label
-        self.best_label = Label(
-            text="",
-            font_size=sp(14),
-            color=get_color_from_hex(COLORS['progress_fill']),
-            pos_hint={'right': 0.98, 'top': 0.84},
-            size_hint=(0.3, 0.04),
-            halign='right'
-        )
-        main_layout.add_widget(self.best_label)
+        self.grid = GridLayout(cols=6, spacing=dp(2), padding=dp(6), size_hint=(None, None))
+        self.container.add_widget(self.grid)
+        self.container.bind(size=self._on_container_resize, pos=self._on_container_resize)
+        root.add_widget(self.container)
         
-        # Grid container with background
-        grid_container = FloatLayout(
-            size_hint=(0.96, 0.62),
-            pos_hint={'center_x': 0.5, 'center_y': 0.48}
-        )
+        # Progress
+        prog = BoxLayout(size_hint_y=None, height=dp(32), padding=[dp(15), dp(8)])
+        prog_bg = Widget()
+        with prog_bg.canvas:
+            Color(*C('b2'))
+            self.pbg = RoundedRectangle(radius=[dp(5)])
+            Color(*C('bwarn'))
+            self.pfill = RoundedRectangle(radius=[dp(5)])
         
-        with grid_container.canvas.before:
-            Color(*get_color_from_hex(COLORS['grid_bg']))
-            self.grid_bg = RoundedRectangle(pos=grid_container.pos, size=grid_container.size, radius=[dp(12)])
-        grid_container.bind(size=self._update_grid_bg, pos=self._update_grid_bg)
+        def upd_prog(w, s):
+            self.pbg.size = (s[0], dp(12))
+            self.pbg.pos = (w.pos[0], w.pos[1])
+            self.pfill.pos = self.pbg.pos
+            self._upd_progress()
+        prog_bg.bind(size=upd_prog, pos=lambda w, p: upd_prog(w, w.size))
+        prog.add_widget(prog_bg)
+        root.add_widget(prog)
         
-        # Game grid
-        self.grid = GameGrid(rows, cols, total, size_hint=(1, 1))
+        self.prog_lbl = Label(text=f"0/{self.total}", font_size=sp(13), color=C('t2'),
+                              size_hint_y=None, height=dp(24))
+        root.add_widget(self.prog_lbl)
         
-        # Bind cell touches
-        grid_container.add_widget(self.grid)
-        main_layout.add_widget(grid_container)
-        
-        # Progress bar background
-        with main_layout.canvas:
-            Color(*get_color_from_hex(COLORS['progress_bg']))
-            self.progress_bg = RoundedRectangle(
-                pos=(dp(20), dp(70)),
-                size=(Window.width - dp(40), dp(16)),
-                radius=[dp(8)]
-            )
-            Color(*get_color_from_hex(COLORS['progress_fill']))
-            self.progress_fill = RoundedRectangle(
-                pos=(dp(20), dp(70)),
-                size=(0, dp(16)),
-                radius=[dp(8)]
-            )
-        
-        # Progress text
-        self.progress_label = Label(
-            text="0 / " + str(total),
-            font_size=sp(14),
-            color=get_color_from_hex(COLORS['text_dark']),
-            pos_hint={'center_x': 0.5, 'y': 0.02},
-            size_hint=(1, 0.05)
-        )
-        main_layout.add_widget(self.progress_label)
-        
-        # Pause overlay
-        self.pause_overlay = FloatLayout(size_hint=(1, 1))
-        with self.pause_overlay.canvas:
-            Color(0.98, 0.97, 0.94, 0.95)
-            self.pause_rect = Rectangle(pos=(0, 0), size=Window.size)
-        
-        pause_text = Label(
-            text=t('paused'),
-            font_size=sp(48),
-            bold=True,
-            color=get_color_from_hex(COLORS['text_dark']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.55}
-        )
-        self.pause_overlay.add_widget(pause_text)
-        
-        tap_text = Label(
-            text=t('tap_resume'),
-            font_size=sp(20),
-            color=get_color_from_hex(COLORS['text_dark']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.42}
-        )
-        self.pause_overlay.add_widget(tap_text)
-        self.pause_overlay.bind(on_touch_down=lambda w, t: self.toggle_pause() if self.is_paused else None)
-        self.pause_overlay.opacity = 0
-        main_layout.add_widget(self.pause_overlay)
-        
-        # Win overlay
-        self.win_overlay = FloatLayout(size_hint=(1, 1))
-        with self.win_overlay.canvas:
-            Color(0.98, 0.97, 0.94, 0.95)
-            self.win_rect = Rectangle(pos=(0, 0), size=Window.size)
-        
-        self.win_text = Label(
-            text=t('congratulations'),
-            font_size=sp(36),
-            bold=True,
-            color=get_color_from_hex(COLORS['cell_correct']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.60}
-        )
-        self.win_overlay.add_widget(self.win_text)
-        
-        self.record_text = Label(
-            text="",
-            font_size=sp(24),
-            color=get_color_from_hex(COLORS['cell_solved']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.50}
-        )
-        self.win_overlay.add_widget(self.record_text)
-        
-        self.final_time_text = Label(
-            text="",
-            font_size=sp(22),
-            color=get_color_from_hex(COLORS['text_dark']),
-            pos_hint={'center_x': 0.5, 'center_y': 0.40}
-        )
-        self.win_overlay.add_widget(self.final_time_text)
-        
-        self.win_overlay.opacity = 0
-        main_layout.add_widget(self.win_overlay)
-        
-        self.add_widget(main_layout)
-        self.main_layout = main_layout
-        
-        # Generate cells
-        self.grid.generate_cells()
-        
-        # Bind cell clicks
-        for row in self.grid.cells:
-            for cell in row:
-                cell.bind(on_release=self.on_cell_click)
+        self.add_widget(root)
     
-    def _update_bg(self, *args):
-        self.bg_rect.size = Window.size
-    
-    def _update_grid_bg(self, widget, *args):
-        self.grid_bg.pos = widget.pos
-        self.grid_bg.size = widget.size
-    
-    def reset_game(self):
-        """Reset the game state"""
-        self.next_target = 1
-        self.start_time = time.time()
-        self.pause_time = 0
-        self.total_pause = 0
-        self.current_run = []
-        self.won = False
-        self.is_paused = False
-        self.final_time = 0
-        self.is_new_record = False
+    def _get_best_grid(self, cw, ch):
+        """Get best rows/cols for screen size"""
+        base = {33: (3, 11), 55: (5, 11), 77: (7, 11)}
+        base_rows, base_cols = base[self.total]
         
-        self.grid.generate_cells()
+        spacing = dp(2)
+        padding = dp(6)
+        margin = dp(8)
         
-        # Rebind cell clicks
-        for row in self.grid.cells:
-            for cell in row:
-                cell.bind(on_release=self.on_cell_click)
+        def calc_cell_sizes(rows, cols):
+            avail_w = cw - margin*2 - padding*2 - spacing*(cols-1)
+            avail_h = ch - margin*2 - padding*2 - spacing*(rows-1)
+            return avail_w / cols, avail_h / rows
         
-        # Update UI
-        self.update_ui()
-        self.win_overlay.opacity = 0
-        self.pause_overlay.opacity = 0
+        # Try both orientations
+        w1, h1 = calc_cell_sizes(base_rows, base_cols)
+        w2, h2 = calc_cell_sizes(base_cols, base_rows)
         
-        # Update best score display
-        app = App.get_running_app()
-        best = game_store.get_best(app.selected_total, app.selected_difficulty)
-        if best:
-            self.best_label.text = f"{t('best')} {self.format_time(best)}"
+        # Pick orientation with better aspect ratio (closer to square)
+        ratio1 = max(w1/h1, h1/w1) if min(w1, h1) > 0 else 999
+        ratio2 = max(w2/h2, h2/w2) if min(w2, h2) > 0 else 999
+        
+        if ratio1 <= ratio2:
+            return base_rows, base_cols, w1, h1
         else:
-            self.best_label.text = ""
-        
-        # Start clock
-        if self.clock_event:
-            self.clock_event.cancel()
-        self.clock_event = Clock.schedule_interval(self.update_time, 0.1)
+            return base_cols, base_rows, w2, h2
     
-    def update_time(self, dt):
-        """Update the timer display"""
-        if self.won or self.is_paused:
+    def _on_container_resize(self, widget, value):
+        """Resize and reposition grid when container changes"""
+        if not self.container or self.container.width <= 1 or self.container.height <= 1:
+            return
+        if not self.cells:
             return
         
-        elapsed = time.time() - self.start_time - self.total_pause
-        self.elapsed_time = elapsed
-        self.time_label.text = f"{t('time')} {self.format_time(int(elapsed))}"
-    
-    def format_time(self, seconds):
-        """Format seconds to display string"""
-        if seconds < 60:
-            return f"{seconds}s"
-        else:
-            mins = seconds // 60
-            secs = seconds % 60
-            return f"{mins}:{secs:02d}"
-    
-    def update_ui(self):
-        """Update UI elements"""
-        app = App.get_running_app()
-        total = app.selected_total
+        cw = self.container.width
+        ch = self.container.height
         
-        self.next_label.text = f"{t('next')} {self.next_target}"
-        self.progress_label.text = f"{self.next_target - 1} / {total}"
+        rows, cols, cell_w, cell_h = self._get_best_grid(cw, ch)
         
-        # Update progress bar
-        progress = (self.next_target - 1) / total
-        bar_width = Window.width - dp(40)
-        self.progress_fill.size = (bar_width * progress, dp(16))
+        # Golden ratio limit (1.618)
+        GOLDEN = 1.618
+        ratio = max(cell_w/cell_h, cell_h/cell_w) if min(cell_w, cell_h) > 0 else 1
+        
+        if ratio > GOLDEN:
+            # Limit to golden ratio
+            if cell_w > cell_h:
+                cell_w = cell_h * GOLDEN
+            else:
+                cell_h = cell_w * GOLDEN
+        
+        # Only rebuild if grid shape changed
+        if rows != self.current_rows or cols != self.current_cols:
+            self._rebuild_grid(rows, cols)
+        
+        spacing = dp(2)
+        padding = dp(6)
+        
+        # Apply cell sizes to grid (can be rectangular now!)
+        self.grid.cols = cols
+        self.grid.row_force_default = True
+        self.grid.col_force_default = True
+        self.grid.row_default_height = cell_h
+        self.grid.col_default_width = cell_w
+        
+        # Calculate grid size
+        grid_w = cell_w * cols + spacing * (cols - 1) + padding * 2
+        grid_h = cell_h * rows + spacing * (rows - 1) + padding * 2
+        
+        self.grid.size = (grid_w, grid_h)
+        
+        # Center in container
+        self.grid.pos = (
+            self.container.x + (cw - grid_w) / 2,
+            self.container.y + (ch - grid_h) / 2
+        )
+        
+        # Update background
+        self.grid_bg.pos = self.grid.pos
+        self.grid_bg.size = self.grid.size
+        
+        # Update font sizes (based on smaller dimension)
+        font_size = min(cell_w, cell_h) * 0.45
+        for btn in self.cells:
+            btn.font_size = font_size
+    
+    def _rebuild_grid(self, new_rows, new_cols):
+        """Rebuild grid when orientation changes"""
+        if not self.cells:
+            return
+        
+        self.current_rows = new_rows
+        self.current_cols = new_cols
+        
+        # Save cell data
+        cell_data = [(c.num, c.is_open, c.is_solved) for c in self.cells]
+        
+        # Clear and rebuild
+        self.grid.clear_widgets()
+        self.grid.cols = new_cols
+        self.cells = []
+        
+        for i, (num, is_open, is_solved) in enumerate(cell_data):
+            btn = Button(
+                text=str(num) if (is_open or is_solved) else '',
+                background_normal='',
+                background_color=C('solved') if is_solved else (C('correct') if is_open else C('cell')),
+                color=C('tw'),
+                bold=True
+            )
+            btn.idx = i
+            btn.num = num
+            btn.is_open = is_open
+            btn.is_solved = is_solved
+            btn.bind(on_release=self._on_cell)
+            self.grid.add_widget(btn)
+            self.cells.append(btn)
+    
+    def new_game(self):
+        self.next_num = 1
+        self.start_t = pytime.time()
+        self.pause_t = 0
+        self.total_p = 0
+        self.paused = False
+        self.won = False
+        self.run = []
+        self.current_rows = 0
+        self.current_cols = 0
+        
+        # Remove win overlay
+        for child in self.children[:]:
+            if isinstance(child, FloatLayout) and child != self.container:
+                self.remove_widget(child)
+        
+        # Clear old cells
+        self.grid.clear_widgets()
+        self.cells = []
+        
+        # Generate shuffled numbers
+        nums = list(range(1, self.total + 1))
+        random.shuffle(nums)
+        
+        # Create cells
+        for i in range(self.total):
+            btn = Button(
+                text='',
+                background_normal='',
+                background_color=C('cell'),
+                color=C('tw'),
+                bold=True
+            )
+            btn.idx = i
+            btn.num = nums[i]
+            btn.is_open = False
+            btn.is_solved = False
+            btn.bind(on_release=self._on_cell)
+            self.grid.add_widget(btn)
+            self.cells.append(btn)
+        
+        # Trigger layout
+        Clock.schedule_once(lambda dt: self._on_container_resize(None, None), 0.05)
+        
+        self._upd_ui()
+        
+        if self.timer:
+            self.timer.cancel()
+        self.timer = Clock.schedule_interval(self._tick, 0.1)
+    
+    def _set_cell(self, btn, state):
+        btn.is_open = state in ('open', 'solved', 'wrong')
+        btn.is_solved = state == 'solved'
+        
+        if state == 'closed':
+            btn.background_color = C('cell')
+            btn.text = ''
+        elif state == 'open':
+            btn.background_color = C('correct')
+            btn.text = str(btn.num)
+        elif state == 'solved':
+            btn.background_color = C('solved')
+            btn.text = str(btn.num)
+        elif state == 'wrong':
+            btn.background_color = C('wrong')
+            btn.text = str(btn.num)
+    
+    def _tick(self, dt):
+        if self.won or self.paused:
+            return
+        e = pytime.time() - self.start_t - self.total_p
+        self.time_lbl.text = f"{T('time')} {self._fmt(int(e))}"
+    
+    def _fmt(self, s):
+        return f"{s}s" if s < 60 else f"{s//60}:{s%60:02d}"
+    
+    def _upd_ui(self):
+        self.next_lbl.text = f"{T('next')} {self.next_num}"
+        self.prog_lbl.text = f"{self.next_num - 1}/{self.total}"
+        self._upd_progress()
+    
+    def _upd_progress(self):
+        if hasattr(self, 'pbg') and self.pbg.size[0] > 0:
+            p = (self.next_num - 1) / self.total
+            self.pfill.size = (self.pbg.size[0] * p, dp(12))
     
     def toggle_pause(self):
-        """Toggle pause state"""
         if self.won:
             return
-        
-        self.is_paused = not self.is_paused
-        
-        if self.is_paused:
-            self.pause_time = time.time()
-            self.pause_overlay.opacity = 1
-            self.pause_btn.text = t('resume')
+        self.paused = not self.paused
+        if self.paused:
+            self.pause_t = pytime.time()
+            self.pause_btn.text = ">"
         else:
-            self.total_pause += time.time() - self.pause_time
-            self.pause_overlay.opacity = 0
-            self.pause_btn.text = t('pause')
+            self.total_p += pytime.time() - self.pause_t
+            self.pause_btn.text = "||"
     
-    def on_cell_click(self, cell):
-        """Handle cell click based on difficulty"""
-        if self.won or self.is_paused:
+    def _on_cell(self, btn):
+        if self.won or self.paused or btn.is_solved:
             return
         
-        if cell.is_solved:
+        diff = App.get_running_app().gdiff
+        if diff == 'easy':
+            self._do_easy(btn)
+        elif diff == 'medium':
+            self._do_medium(btn)
+        else:
+            self._do_hard(btn)
+    
+    def _do_easy(self, btn):
+        for c in self.cells:
+            if c.is_open and not c.is_solved:
+                self._set_cell(c, 'closed')
+        
+        self._set_cell(btn, 'open')
+        
+        if btn.num == self.next_num:
+            self._set_cell(btn, 'solved')
+            self.next_num += 1
+            self._upd_ui()
+            if self.next_num > self.total:
+                self._win()
+        else:
+            self._set_cell(btn, 'wrong')
+            Clock.schedule_once(lambda dt: self._set_cell(btn, 'closed'), 0.35)
+    
+    def _do_medium(self, btn):
+        if btn.idx in self.run:
             return
         
-        app = App.get_running_app()
-        difficulty = app.selected_difficulty
+        self._set_cell(btn, 'open')
         
-        if difficulty == 'easy':
-            self.handle_easy_click(cell)
-        elif difficulty == 'medium':
-            self.handle_medium_click(cell)
+        if btn.num == self.next_num:
+            self.run.append(btn.idx)
+            self.next_num += 1
+            self._upd_ui()
+            
+            done = self.next_num - 1
+            if (done % self.cp == 0) or (done == self.total):
+                for idx in self.run:
+                    self._set_cell(self.cells[idx], 'solved')
+                self.run = []
+            
+            if self.next_num > self.total:
+                self._win()
         else:
-            self.handle_hard_click(cell)
+            self._set_cell(btn, 'wrong')
+            Clock.schedule_once(lambda dt: self._reset_cp(btn), 0.35)
     
-    def handle_easy_click(self, cell):
-        """Easy mode: one number at a time"""
-        # Close all open non-solved cells
-        for row in self.grid.cells:
-            for c in row:
-                if c.is_open and not c.is_solved:
-                    c.is_open = False
-                    c.update_canvas()
+    def _do_hard(self, btn):
+        self._set_cell(btn, 'open')
         
-        cell.is_open = True
-        cell.update_canvas()
-        
-        if cell.number == self.next_target:
-            cell.is_solved = True
-            cell.update_canvas()
-            self.next_target += 1
-            self.update_ui()
-            
-            app = App.get_running_app()
-            if self.next_target > app.selected_total:
-                self.trigger_win()
+        if btn.num == self.next_num:
+            self._set_cell(btn, 'solved')
+            self.next_num += 1
+            self._upd_ui()
+            if self.next_num > self.total:
+                self._win()
         else:
-            cell.show_wrong()
-            Clock.schedule_once(lambda dt: self.close_cell(cell), 0.3)
+            self._set_cell(btn, 'wrong')
+            Clock.schedule_once(lambda dt: self._reset_all(btn), 0.35)
     
-    def handle_medium_click(self, cell):
-        """Medium mode: checkpoint-based"""
-        if (cell.row, cell.col) in self.current_run:
-            return
+    def _reset_cp(self, clicked):
+        for idx in self.run:
+            self._set_cell(self.cells[idx], 'closed')
+        self.run = []
+        self._set_cell(clicked, 'closed')
         
-        cell.is_open = True
-        cell.update_canvas()
-        
-        if cell.number == self.next_target:
-            self.current_run.append((cell.row, cell.col))
-            self.next_target += 1
-            self.update_ui()
-            
-            finished = self.next_target - 1
-            block_done = (finished % self.checkpoint_size == 0) or (finished == App.get_running_app().selected_total)
-            
-            if block_done:
-                for r, c in self.current_run:
-                    self.grid.cells[r][c].is_solved = True
-                    self.grid.cells[r][c].update_canvas()
-                self.current_run = []
-            
-            app = App.get_running_app()
-            if self.next_target > app.selected_total:
-                self.trigger_win()
-        else:
-            cell.show_wrong()
-            Clock.schedule_once(lambda dt: self.reset_checkpoint(cell), 0.3)
+        last = ((self.next_num - 1) // self.cp) * self.cp
+        self.next_num = last + 1
+        self._upd_ui()
     
-    def handle_hard_click(self, cell):
-        """Hard mode: any mistake resets everything"""
-        cell.is_open = True
-        cell.update_canvas()
-        
-        if cell.number == self.next_target:
-            cell.is_solved = True
-            cell.update_canvas()
-            self.next_target += 1
-            self.update_ui()
-            
-            app = App.get_running_app()
-            if self.next_target > app.selected_total:
-                self.trigger_win()
-        else:
-            cell.show_wrong()
-            Clock.schedule_once(lambda dt: self.reset_all(cell), 0.3)
+    def _reset_all(self, clicked):
+        for c in self.cells:
+            self._set_cell(c, 'closed')
+        self.next_num = 1
+        self._upd_ui()
     
-    def close_cell(self, cell):
-        """Close a single cell"""
-        cell.is_open = False
-        cell.update_canvas()
-    
-    def reset_checkpoint(self, clicked_cell):
-        """Reset to last checkpoint (medium mode)"""
-        for r, c in self.current_run:
-            self.grid.cells[r][c].is_open = False
-            self.grid.cells[r][c].update_canvas()
-        self.current_run = []
-        clicked_cell.is_open = False
-        clicked_cell.update_canvas()
-        
-        last_checkpoint = ((self.next_target - 1) // self.checkpoint_size) * self.checkpoint_size
-        self.next_target = last_checkpoint + 1
-        self.update_ui()
-    
-    def reset_all(self, clicked_cell):
-        """Reset all cells (hard mode)"""
-        for row in self.grid.cells:
-            for cell in row:
-                cell.is_open = False
-                cell.is_solved = False
-                cell.update_canvas()
-        clicked_cell.is_open = False
-        clicked_cell.update_canvas()
-        
-        self.next_target = 1
-        self.update_ui()
-    
-    def trigger_win(self):
-        """Handle win condition"""
+    def _win(self):
         self.won = True
-        self.final_time = int(time.time() - self.start_time - self.total_pause)
+        if self.timer:
+            self.timer.cancel()
         
-        if self.clock_event:
-            self.clock_event.cancel()
+        final = int(pytime.time() - self.start_t - self.total_p)
+        rec = DB.set_best(self.total, App.get_running_app().gdiff, final)
         
-        # Check for new record
-        app = App.get_running_app()
-        self.is_new_record = game_store.set_best(
-            app.selected_total,
-            app.selected_difficulty,
-            self.final_time
-        )
+        ov = FloatLayout()
+        with ov.canvas:
+            Color(*C('bg')[:3], 0.93)
+            Rectangle(size=Window.size)
         
-        # Update win overlay
-        self.win_text.text = t('congratulations')
-        self.final_time_text.text = f"{t('time')} {self.format_time(self.final_time)}"
-        
-        if self.is_new_record:
-            self.record_text.text = t('new_record')
-        else:
-            self.record_text.text = ""
-        
-        # Show win overlay with animation
-        anim = Animation(opacity=1, duration=0.3)
-        anim.start(self.win_overlay)
+        ov.add_widget(Label(text=T('congrats'), font_size=sp(32), bold=True,
+                           color=C('correct'), pos_hint={'center_x': 0.5, 'center_y': 0.55}))
+        if rec:
+            ov.add_widget(Label(text=T('record'), font_size=sp(22),
+                               color=C('solved'), pos_hint={'center_x': 0.5, 'center_y': 0.45}))
+        ov.add_widget(Label(text=f"{T('time')} {self._fmt(final)}", font_size=sp(20),
+                           color=C('t1'), pos_hint={'center_x': 0.5, 'center_y': 0.35}))
+        self.add_widget(ov)
     
     def go_back(self):
-        """Go back to difficulty selection"""
-        if self.clock_event:
-            self.clock_event.cancel()
-        App.get_running_app().sm.current = 'difficulty'
+        if self.timer:
+            self.timer.cancel()
+        App.get_running_app().sm.current = 'diff'
 
-
+# ============== APP ==============
 class The77App(App):
-    """Main application class"""
-    selected_total = NumericProperty(33)
-    selected_difficulty = StringProperty('easy')
+    gtotal = NumericProperty(33)
+    gdiff = StringProperty('easy')
     
     def build(self):
-        # Set window background color
-        Window.clearcolor = get_color_from_hex(COLORS['bg'])
+        DB.load()
+        Window.clearcolor = C('bg')
         
-        # Create screen manager
-        self.sm = ScreenManager(transition=FadeTransition(duration=0.2))
-        
-        # Add screens
+        self.sm = ScreenManager(transition=SlideTransition(duration=0.2))
         self.sm.add_widget(MenuScreen(name='menu'))
-        self.sm.add_widget(DifficultyScreen(name='difficulty'))
+        self.sm.add_widget(DiffScreen(name='diff'))
         self.sm.add_widget(SettingsScreen(name='settings'))
         self.sm.add_widget(GameScreen(name='game'))
-        
         return self.sm
-
 
 if __name__ == '__main__':
     The77App().run()
